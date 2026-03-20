@@ -137,11 +137,10 @@ const Signup: React.FC<SignupProps> = ({ onNavigate }) => {
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1.5">Register As</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { role: UserRole.CITIZEN, label: 'Citizen', icon: '👤' },
-                { role: UserRole.OFFICER, label: 'Officer', icon: '👮' },
-                { role: UserRole.ADMIN, label: 'Admin', icon: '⚙️' }
+                { role: UserRole.OFFICER, label: 'Officer', icon: '👮' }
               ].map((item) => (
                 <button
                   key={item.role}

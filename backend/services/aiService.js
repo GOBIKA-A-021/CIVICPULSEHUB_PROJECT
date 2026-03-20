@@ -126,9 +126,24 @@ Respond with ONLY the exact category name from the list, nothing else.`;
   fallbackCategorization(description) {
     const desc = description.toLowerCase();
     
-    // Road-related keywords
+    // Street lighting keywords (check FIRST - more specific)
+    if (desc.includes('street light') || desc.includes('streetlight') || desc.includes('lamp') || 
+        desc.includes('illumination') || desc.includes('dark') || 
+        (desc.includes('light') && desc.includes('street'))) {
+      return 'Street Lighting';
+    }
+    
+    // Electricity-related keywords (check before general 'electric')
+    if (desc.includes('power') || desc.includes('outage') || 
+        desc.includes('current') || desc.includes('wire') ||
+        (desc.includes('electric') && !desc.includes('street'))) {
+      return 'Electricity';
+    }
+    
+    // Road-related keywords (check after street lighting)
     if (desc.includes('road') || desc.includes('pothole') || desc.includes('pavement') || 
-        desc.includes('crack') || desc.includes('street') || desc.includes('highway')) {
+        desc.includes('crack') || (desc.includes('street') && !desc.includes('light')) || 
+        desc.includes('highway')) {
       return 'Road Maintenance';
     }
     
@@ -138,22 +153,10 @@ Respond with ONLY the exact category name from the list, nothing else.`;
       return 'Water Supply';
     }
     
-    // Electricity-related keywords
-    if (desc.includes('electric') || desc.includes('power') || desc.includes('outage') || 
-        desc.includes('current') || desc.includes('wire')) {
-      return 'Electricity';
-    }
-    
     // Sanitation-related keywords
     if (desc.includes('garbage') || desc.includes('waste') || desc.includes('trash') || 
         desc.includes('cleanliness') || desc.includes('dump')) {
       return 'Waste Management';
-    }
-    
-    // Street lighting keywords
-    if (desc.includes('light') || desc.includes('lamp') || desc.includes('street light') || 
-        desc.includes('illumination') || desc.includes('dark')) {
-      return 'Street Lighting';
     }
     
     // Drainage keywords
@@ -288,17 +291,21 @@ Respond with ONLY one word: HIGH, MEDIUM, or LOW`;
       return 'LOW';
     }
     
-    // Context-based priority detection
-    if (desc.includes('no') || desc.includes('broken') || desc.includes('leaking') || desc.includes('blocked')) {
+    // Context-based priority detection - enhanced
+    if (desc.includes('no') || desc.includes('broken') || desc.includes('leaking') || desc.includes('blocked') ||
+        desc.includes('danger') || desc.includes('hazard') || desc.includes('accident') ||
+        desc.includes('falling') || desc.includes('collapsed') || desc.includes('burst')) {
       console.log(`🔴 High Priority (Context): ${description.substring(0, 50)}...`);
       return 'HIGH';
     }
     
-    if (desc.includes('poor') || desc.includes('bad') || desc.includes('slow') || desc.includes('intermittent')) {
+    if (desc.includes('poor') || desc.includes('bad') || desc.includes('slow') || desc.includes('intermittent') ||
+        desc.includes('weak') || desc.includes('low pressure') || desc.includes('flickering')) {
       console.log(`🟡 Medium Priority (Context): ${description.substring(0, 50)}...`);
       return 'MEDIUM';
     }
     
+    // Default to LOW for minor issues
     console.log(`🟢 Low Priority (Default): ${description.substring(0, 50)}...`);
     return 'LOW';
   },
@@ -427,16 +434,39 @@ Is this a duplicate? If yes, return the complaint ID. If no, return NONE.`;
         console.warn(`Department not found for key "${departmentKey}", using PUBLIC_SAFETY as fallback`);
       }
 
-      // Step 2: Find available officers in the relevant department
-      // Query using departmentKey field (the reliable identifier)
-      const officers = await User.find({
-        role: 'OFFICER',
-        departmentKey: departmentKey,
-        isActive: true,
-        departmentKey: { $exists: true, $ne: null }  // MUST have departmentKey set
-      }).select('_id name email department departmentKey pendingComplaints');
-
-      console.log(`Found ${officers.length} active officers in department "${departmentKey}"`);
+      // Step 2: Find available officers in the relevant department and district
+      // First try exact district match, then department match
+      let officers = [];
+      
+      // Try to find officers in the same district first
+      if (location) {
+        // Extract district from location (simple text matching)
+        const locationLower = location.toLowerCase();
+        console.log(`🔍 Searching for officers in location: "${location}"`);
+        
+        officers = await User.find({
+          role: 'OFFICER',
+          departmentKey: departmentKey,
+          district: { $regex: locationLower, $options: 'i' }, // Case-insensitive district match
+          isActive: true,
+          departmentKey: { $exists: true, $ne: null }
+        }).select('_id name email department departmentKey pendingComplaints district');
+        
+        console.log(`Found ${officers.length} officers in department "${departmentKey}" and matching district "${location}"`);
+      }
+      
+      // If no district match, fallback to department-only search
+      if (officers.length === 0) {
+        console.log(`⚠️ No officers found in district, searching by department only...`);
+        officers = await User.find({
+          role: 'OFFICER',
+          departmentKey: departmentKey,
+          isActive: true,
+          departmentKey: { $exists: true, $ne: null }
+        }).select('_id name email department departmentKey pendingComplaints district');
+        
+        console.log(`Found ${officers.length} officers in department "${departmentKey}" (district ignored)`);
+      }
 
       // Validate that officers have required fields
       const validOfficers = officers.filter(o => 
@@ -515,13 +545,58 @@ Complaint: "${description}"
 Sentiment:`;
 
       const response = await callGemini(prompt, 0.3);
+      
+      // Handle null response (no API key or API failure)
+      if (!response) {
+        console.log('🔄 Gemini API not available, using fallback sentiment analysis');
+        return this.fallbackSentimentAnalysis(description);
+      }
+      
       const sentiment = response?.toLowerCase().trim();
       const validSentiments = ['urgent', 'frustrated', 'neutral', 'informational'];
       return validSentiments.includes(sentiment) ? sentiment : 'neutral';
     } catch (error) {
       console.error('Sentiment Analysis Error:', error);
-      return 'neutral';
+      // Enhanced fallback sentiment analysis
+      return this.fallbackSentimentAnalysis(description);
     }
+  },
+
+  // Enhanced fallback sentiment analysis
+  fallbackSentimentAnalysis(description) {
+    const desc = description.toLowerCase();
+    
+    // Urgent/Emergency indicators - expanded
+    if (desc.includes('urgent') || desc.includes('emergency') || desc.includes('immediately') || 
+        desc.includes('asap') || desc.includes('critical') || desc.includes('danger') ||
+        desc.includes('hazard') || desc.includes('accident') || desc.includes('injury') ||
+        desc.includes('life threatening') || desc.includes('safety risk')) {
+      console.log(`🔴 Urgent sentiment detected: ${description.substring(0, 50)}...`);
+      return 'urgent';
+    }
+    
+    // Frustrated/Angry indicators - expanded for citizen complaints
+    if (desc.includes('frustrated') || desc.includes('angry') || desc.includes('mad') || 
+        desc.includes('sick') || desc.includes('tired') || desc.includes('fed up') ||
+        desc.includes('disappointed') || desc.includes('neglect') || desc.includes('terrible') ||
+        desc.includes('not properly') || desc.includes('not working') || desc.includes('broken') ||
+        desc.includes('blocked') || desc.includes('patholes') || desc.includes('potholes') ||
+        desc.includes('frequently') || desc.includes('again and again') || desc.includes('always')) {
+      console.log(`😠 Frustrated sentiment detected: ${description.substring(0, 50)}...`);
+      return 'frustrated';
+    }
+    
+    // Informational indicators - simple reporting
+    if (desc.includes('reporting') || desc.includes('informing') || desc.includes('bringing to attention') ||
+        desc.includes('note') || desc.includes('fyi') || desc.includes('there is') ||
+        desc.includes('would like to') || desc.includes('requesting') || desc.includes('please')) {
+      console.log(`📝 Informational sentiment detected: ${description.substring(0, 50)}...`);
+      return 'informational';
+    }
+    
+    // Default to neutral - but only for truly neutral descriptions
+    console.log(`😐 Neutral sentiment (default): ${description.substring(0, 50)}...`);
+    return 'neutral';
   },
 
   /**
@@ -543,11 +618,22 @@ Sentiment:`;
       const clusters = {};
 
       for (const complaint of allComplaints) {
-        const key = `${complaint.category}::${complaint.location}`;
+        // Extract area from location (more flexible matching)
+        const location = complaint.location.toLowerCase();
+        let area = location;
+        
+        // Extract main area from location (before comma)
+        if (location.includes(',')) {
+          area = location.split(',')[0].trim();
+        }
+        
+        // Create cluster key with category + main area
+        const key = `${complaint.category}::${area}`;
+        
         if (!clusters[key]) {
           clusters[key] = {
             category: complaint.category,
-            location: complaint.location,
+            location: area,
             complaints: [],
             count: 0
           };
@@ -556,10 +642,18 @@ Sentiment:`;
         clusters[key].count++;
       }
 
+      console.log(`📊 Found ${Object.keys(clusters).length} potential clusters`);
+      Object.keys(clusters).forEach(key => {
+        console.log(`   - ${key}: ${clusters[key].count} complaints`);
+      });
+
       // Return clusters with more than 1 complaint, sorted by count
-      return Object.values(clusters)
+      const result = Object.values(clusters)
         .filter(c => c.complaints.length > 1)
         .sort((a, b) => b.count - a.count);
+      
+      console.log(`📈 Returning ${result.length} clusters with multiple complaints`);
+      return result;
     } catch (error) {
       console.error('Clustering Error:', error);
       return [];

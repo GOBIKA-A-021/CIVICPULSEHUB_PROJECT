@@ -39,6 +39,8 @@ const seedDB = async () => {
     const count = await User.countDocuments();
 
     if (count === 0) {
+      console.log('🌱 Database is empty. Seeding initial users...');
+      
       const hashedPassword = await bcrypt.hash("password123", 10);
 
       await User.insertMany([
@@ -129,9 +131,12 @@ const seedDB = async () => {
       console.log("   ✓ 1 Admin");
       console.log("   ✓ 5 Officers (WATER, ELECTRICITY, ROADS, SANITATION, PUBLIC_SAFETY)");
       console.log("   ✓ 1 Citizen");
+    } else {
+      console.log(`✅ Database already has ${count} users - preserving existing data`);
+      console.log("   ✓ Existing users and their data preserved");
     }
-  } catch (err) {
-    console.warn("⚠️ Could not seed database:", err.message);
+  } catch (error) {
+    console.error("❌ Error seeding database:", error);
   }
 };
 

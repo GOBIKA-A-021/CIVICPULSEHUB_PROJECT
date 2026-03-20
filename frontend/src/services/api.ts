@@ -56,6 +56,72 @@ export const api = {
     return response.json();
   },
 
+  forgotPassword: async (email: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to send reset email');
+    }
+    return response.json();
+  },
+
+  resetPassword: async (token: string, email: string, newPassword: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, email, newPassword })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to reset password');
+    }
+    return response.json();
+  },
+
+  // Alternative password reset methods
+  forgotPasswordAlternative: async (email: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/auth/forgot-password-alternative`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, method: 'security_questions' })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to process password reset request');
+    }
+    return response.json();
+  },
+
+  resetPasswordBySecurity: async (email: string, securityAnswer: string, newPassword: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/auth/reset-password-security`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, securityAnswer, newPassword })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to reset password');
+    }
+    return response.json();
+  },
+
+  setupSecurityQuestions: async (email: string, securityQuestion: string, securityAnswer: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/auth/setup-security-questions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, securityQuestion, securityAnswer })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to setup security questions');
+    }
+    return response.json();
+  },
+
   getAuth: (): User | null => {
     const auth = localStorage.getItem('civic_pulse_auth');
     return auth ? JSON.parse(auth) : null;

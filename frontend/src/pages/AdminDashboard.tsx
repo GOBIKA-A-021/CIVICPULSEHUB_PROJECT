@@ -56,12 +56,23 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
   };
 
   const loadData = async () => {
-    const [gList, oList] = await Promise.all([
-      api.getGrievances(),
-      api.getOfficers()
-    ]);
-    setGrievances(gList);
-    setOfficers(oList);
+    try {
+      const [gList, oList] = await Promise.all([
+        api.getGrievances(),
+        api.getOfficers()
+      ]);
+      console.log(`📊 Admin Dashboard loaded:`);
+      console.log(`   - ${gList.length} grievances`);
+      console.log(`   - ${oList.length} officers`);
+      console.log(`👮 Officers list:`);
+      oList.forEach(o => {
+        console.log(`   - ${o.name} (${o.email}) - ${o.department}`);
+      });
+      setGrievances(gList);
+      setOfficers(oList);
+    } catch (error) {
+      console.error('❌ Error loading admin dashboard data:', error);
+    }
   };
 
   const handleViewDetails = (complaint: Grievance) => {
@@ -75,16 +86,24 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
       return;
     }
     const officer = officers.find(o => o.id === selectedOfficerId);
+    console.log(`🔧 Assigning complaint ${id} to officer:`);
+    console.log(`   - Officer ID: ${selectedOfficerId}`);
+    console.log(`   - Officer Name: ${officer?.name}`);
+    console.log(`   - Officer Email: ${officer?.email}`);
+    console.log(`   - Officer Department: ${officer?.department}`);
+    
     setIsAssigning(true);
     setError(null);
     try {
       await api.updateGrievance(id, { 
-        status: GrievanceStatus.IN_PROGRESS,
+        status: GrievanceStatus.PENDING, // Keep as PENDING until officer starts work
         assignedOfficer: officer?.name || 'Unknown Officer',
+        assignedOfficerId: officer?.id || selectedOfficerId, // Set the officer ID
         officerLevel: officer?.designation || officer?.department || 'Field Specialist',
         department: officer?.department || officer?.departmentKey || 'General',
         updatedAt: new Date().toISOString()
       });
+      console.log(`✅ Successfully assigned complaint ${id} to ${officer?.name}`);
       setAssigningId(null);
       setSelectedOfficerId('');
       
@@ -145,7 +164,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
   }, {});
 
   const categoryData = Object.keys(categoryCounts).map(cat => ({
-    name: cat,
+    name: cat.replace('_', ' '),
     value: categoryCounts[cat]
   }));
 
@@ -174,18 +193,18 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
     <div className="space-y-10 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">System Oversight</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">System Oversight</h1>
           <p className="text-slate-500 font-medium">Managing civic health across all sectors • {officers.length} Active Officers</p>
         </div>
         <div className="flex gap-4">
           <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center min-w-[120px]">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Efficiency</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-normal mb-1">Efficiency</span>
             <span className="text-2xl font-black text-emerald-600">
               {Math.round(((closedCount + resolvedCount) / (grievances.length || 1)) * 100)}%
             </span>
           </div>
           <div className="bg-white px-6 py-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center min-w-[120px]">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Reports</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-normal mb-1">Total Reports</span>
             <span className="text-2xl font-black text-blue-600">{grievances.length}</span>
           </div>
         </div>
@@ -195,7 +214,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl p-8 text-white shadow-xl shadow-blue-100 flex flex-col justify-between">
           <div>
-            <h4 className="text-blue-100 font-black uppercase text-[10px] tracking-widest mb-3">Total Pending</h4>
+            <h4 className="text-blue-100 font-black uppercase text-[10px] tracking-normal mb-3">Total Pending</h4>
             <p className="text-5xl font-black">{pendingCount}</p>
           </div>
           <div className="w-full bg-blue-500/30 h-2 rounded-full mt-6 overflow-hidden">
@@ -206,7 +225,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
         <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-3xl p-8 text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
           <div>
-            <h4 className="text-indigo-100 font-black uppercase text-[10px] tracking-widest mb-3">In Progress</h4>
+            <h4 className="text-indigo-100 font-black uppercase text-[10px] tracking-normal mb-3">In Progress</h4>
             <p className="text-5xl font-black">{inProgressCount}</p>
           </div>
           <div className="w-full bg-indigo-500/30 h-2 rounded-full mt-6 overflow-hidden">
@@ -217,7 +236,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-100 flex flex-col justify-between">
           <div>
-            <h4 className="text-emerald-100 font-black uppercase text-[10px] tracking-widest mb-3">Resolved</h4>
+            <h4 className="text-emerald-100 font-black uppercase text-[10px] tracking-normal mb-3">Resolved</h4>
             <p className="text-5xl font-black">{resolvedCount}</p>
           </div>
           <div className="w-full bg-emerald-500/30 h-2 rounded-full mt-6 overflow-hidden">
@@ -228,7 +247,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
         <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-8 text-white shadow-xl shadow-red-100 flex flex-col justify-between">
           <div>
-            <h4 className="text-red-100 font-black uppercase text-[10px] tracking-widest mb-3">Closed</h4>
+            <h4 className="text-red-100 font-black uppercase text-[10px] tracking-normal mb-3">Closed</h4>
             <p className="text-5xl font-black">{closedCount}</p>
           </div>
           <div className="w-full bg-red-500/30 h-2 rounded-full mt-6 overflow-hidden">
@@ -239,30 +258,33 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider">Complaint Status</h3>
-            <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm min-w-0 xl:col-span-1">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8">
+            <h3 className="font-black text-slate-900 text-xs uppercase tracking-normal">Complaint Status Distribution</h3>
+            <div className="flex flex-wrap gap-1 max-w-full">
               {statusData.map((d, i) => (
-                <div key={d.name} className="flex items-center text-[8px] font-black uppercase tracking-tighter">
-                  <div className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="text-slate-500">{d.value}</span>
+                <div key={d.name} className="flex items-center text-[10px] font-black uppercase tracking-normal flex-shrink-0 px-1">
+                  <div className="w-1.5 h-1.5 rounded-full mr-0.5" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                  <span className="text-slate-500 whitespace-nowrap">{d.name}</span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="h-72">
+          <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={statusData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={5}
+                  innerRadius={40}
+                  outerRadius={60}
+                  paddingAngle={2}
                   dataKey="value"
+                  label={({name, value}) => `${name}: ${value}`}
+                  labelLine={false}
+                  labelStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                 >
                   {statusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -274,15 +296,22 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider mb-8">Category Breakdown</h3>
-          <div className="h-72">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm min-w-0 xl:col-span-1">
+          <h3 className="font-black text-slate-900 text-xs uppercase tracking-normal mb-8">Category Wise Solutions</h3>
+          <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fontWeight: 'bold' }} width={140} />
+              <BarChart data={categoryData} layout="horizontal" margin={{ top: 5, right: 5, left: 200, bottom: 5 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                  width={195}
+                  angle={0}
+                  textAnchor="end"
+                />
                 <Tooltip cursor={{ fill: '#F8FAFC' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="value" fill="#3B82F6" radius={[0, 12, 12, 0]}>
+                <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]}>
                   {categoryData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -292,26 +321,38 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider mb-6">Top Officers by Assignments</h3>
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm overflow-hidden min-w-0 xl:col-span-2">
+          <h3 className="font-black text-slate-900 text-xs uppercase tracking-normal mb-6">Registered Officers</h3>
           <div className="space-y-3 max-h-80 overflow-y-auto">
-            {officerWorkload.sort((a, b) => b.assigned - a.assigned).slice(0, 6).map((officer, idx) => (
-              <div key={idx} className="p-4 bg-gradient-to-r from-slate-50 to-transparent rounded-2xl border border-slate-100 hover:border-blue-200 transition">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex-1">
-                    <span className="text-sm font-black text-slate-900">{officer.name}</span>
-                    <span className="block text-[10px] text-slate-400">{officer.district}</span>
-                  </div>
-                  <span className="text-2xl font-black text-blue-600">{officer.assigned}</span>
+            {officerWorkload.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="text-slate-400 mb-2">
+                  <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2m8-10V5a2 2 0 114 0v6m-6 0h12" />
+                  </svg>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(officer.resolved / (officer.assigned || 1)) * 100}%` }}></div>
-                  </div>
-                  <span className="text-[10px] font-bold text-slate-600">{officer.resolved} resolved</span>
-                </div>
+                <p className="text-sm text-slate-500 font-medium">No officers have signed up yet</p>
+                <p className="text-xs text-slate-400 mt-2">Officers need to create accounts through the signup process</p>
               </div>
-            ))}
+            ) : (
+              officerWorkload.sort((a, b) => b.assigned - a.assigned).slice(0, 6).map((officer, idx) => (
+                <div key={idx} className="p-4 bg-gradient-to-r from-slate-50 to-transparent rounded-2xl border border-slate-100 hover:border-blue-200 transition">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1">
+                      <span className="text-sm font-black text-slate-900">{officer.name}</span>
+                      <span className="block text-[10px] text-slate-400">{officer.district}</span>
+                    </div>
+                    <span className="text-2xl font-black text-blue-600">{officer.assigned}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(officer.resolved / (officer.assigned || 1)) * 100}%` }}></div>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-600">{officer.resolved} resolved</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -374,7 +415,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
       {/* Complaint Clusters */}
       <div>
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div>
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Complaint Clusters</h3>
             <p className="text-sm text-slate-500 mt-1">Similar complaints grouped by category and location</p>
@@ -404,7 +445,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h4 className="font-black text-slate-900 text-sm">{cluster.category}</h4>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mt-1">{cluster.location}</p>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-normal font-bold mt-1">{cluster.location}</p>
                     </div>
                     <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-xl text-sm font-bold">
                       {cluster.count} similar
@@ -536,7 +577,11 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
                        >
                          <option value="">Select Officer</option>
                          {officers.map(o => (
-                           <option key={o.id} value={o.id}>{o.name} ({o.department})</option>
+                           <option key={o.id} value={o.id}>
+                             {o.name} - {o.designation} ({o.department})
+                             {o.employeeId && ` - ID: ${o.employeeId}`}
+                             {o.district && ` - ${o.district}`}
+                           </option>
                          ))}
                        </select>
                        <div className="flex gap-2">
@@ -631,22 +676,22 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Basic Information</h3>
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Basic Information</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Title</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Title</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.title}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Category</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Category</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.category}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Location</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Location</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.location}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Priority</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Priority</p>
                     <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
                       selectedComplaint.priority === Priority.HIGH ? 'bg-red-100 text-red-600' :
                       selectedComplaint.priority === Priority.MEDIUM ? 'bg-yellow-100 text-yellow-600' :
@@ -656,7 +701,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
                     </span>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Status</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Status</p>
                     <span className={`inline-block px-3 py-1 rounded-lg text-xs font-bold ${
                       selectedComplaint.status === GrievanceStatus.PENDING ? 'bg-amber-100 text-amber-700' :
                       selectedComplaint.status === GrievanceStatus.IN_PROGRESS ? 'bg-blue-100 text-blue-600' :
@@ -671,27 +716,27 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
               </div>
 
               <div>
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Assignment Information</h3>
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Assignment Information</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Assigned Officer</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Assigned Officer</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.assignedOfficer || 'Not Assigned'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Department</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Department</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.department || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Officer Level</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Officer Level</p>
                     <p className="font-bold text-slate-900">{selectedComplaint.officerLevel || selectedComplaint.designation || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Submitted</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-normal">Submitted</p>
                     <p className="font-bold text-slate-900">{new Date(selectedComplaint.createdAt).toLocaleDateString()}</p>
                   </div>
                   {selectedComplaint.resolvedAt && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider">Resolved</p>
+                      <p className="text-xs text-slate-500 uppercase tracking-normal">Resolved</p>
                       <p className="font-bold text-slate-900">{new Date(selectedComplaint.resolvedAt).toLocaleDateString()}</p>
                     </div>
                   )}
@@ -701,29 +746,29 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
             {/* Description */}
             <div>
-              <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Description</h3>
+              <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Description</h3>
               <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl">{selectedComplaint.description}</p>
             </div>
 
             {/* AI Insights */}
             <div>
-              <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">AI Insights</h3>
+              <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">AI Insights</h3>
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-blue-600 uppercase tracking-wider">AI Category</p>
+                    <p className="text-xs text-blue-600 uppercase tracking-normal">AI Category</p>
                     <p className="font-bold text-blue-900">{selectedComplaint.aiCategory || selectedComplaint.category || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-600 uppercase tracking-wider">AI Priority</p>
+                    <p className="text-xs text-blue-600 uppercase tracking-normal">AI Priority</p>
                     <p className="font-bold text-blue-900">{selectedComplaint.aiPriority || selectedComplaint.priority || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-600 uppercase tracking-wider">Sentiment</p>
+                    <p className="text-xs text-blue-600 uppercase tracking-normal">Sentiment</p>
                     <p className="font-bold text-blue-900">{selectedComplaint.aiSentiment || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-600 uppercase tracking-wider">AI Summary</p>
+                    <p className="text-xs text-blue-600 uppercase tracking-normal">AI Summary</p>
                     <p className="font-bold text-blue-900 text-sm">{selectedComplaint.aiSummary || 'N/A'}</p>
                   </div>
                 </div>
@@ -732,18 +777,18 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
 
             {/* Images */}
             <div>
-              <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Evidence</h3>
+              <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Evidence</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {selectedComplaint.issueImage && (
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Issue Image</p>
-                    <img src={selectedComplaint.issueImage} className="w-full h-48 object-cover rounded-xl border border-slate-200" alt="Issue" />
+                    <p className="text-xs text-slate-500 uppercase tracking-normal mb-2">Issue Image</p>
+                    <img src={selectedComplaint.issueImage} className="w-full h-48 object-contain rounded-xl border border-slate-200" alt="Issue" />
                   </div>
                 )}
                 {selectedComplaint.proofImage && (
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Proof Image</p>
-                    <img src={selectedComplaint.proofImage} className="w-full h-48 object-cover rounded-xl border border-slate-200" alt="Proof" />
+                    <p className="text-xs text-slate-500 uppercase tracking-normal mb-2">Proof Image</p>
+                    <img src={selectedComplaint.proofImage} className="w-full h-48 object-contain rounded-xl border border-slate-200" alt="Proof" />
                   </div>
                 )}
                 {!selectedComplaint.issueImage && !selectedComplaint.proofImage && (
@@ -755,9 +800,9 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
             {/* Resolution Details */}
             {selectedComplaint.status === GrievanceStatus.RESOLVED && (
               <div>
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Resolution Details</h3>
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Resolution Details</h3>
                 <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                  <p className="text-xs text-emerald-600 uppercase tracking-wider mb-2">Resolution Remarks</p>
+                  <p className="text-xs text-emerald-600 uppercase tracking-normal mb-2">Resolution Remarks</p>
                   <p className="text-emerald-900">{selectedComplaint.resolutionRemarks || 'No remarks provided'}</p>
                 </div>
               </div>
@@ -766,16 +811,16 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
             {/* Feedback */}
             {selectedComplaint.isSatisfied !== undefined && (
               <div>
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4">Citizen Feedback</h3>
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-normal mb-4">Citizen Feedback</h3>
                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-purple-600 uppercase tracking-wider mb-1">Satisfaction</p>
+                      <p className="text-xs text-purple-600 uppercase tracking-normal mb-1">Satisfaction</p>
                       <p className="font-bold text-purple-900">{selectedComplaint.isSatisfied ? 'Satisfied' : 'Not Satisfied'}</p>
                     </div>
                     {selectedComplaint.rating && (
                       <div className="text-right">
-                        <p className="text-xs text-purple-600 uppercase tracking-wider mb-1">Rating</p>
+                        <p className="text-xs text-purple-600 uppercase tracking-normal mb-1">Rating</p>
                         <div className="flex text-yellow-400">
                           {[1, 2, 3, 4, 5].map(star => (
                             <svg key={star} className={`w-4 h-4 ${star <= (selectedComplaint.rating || 0) ? 'fill-current' : 'text-gray-300'}`} viewBox="0 0 20 20">
@@ -788,7 +833,7 @@ const AdminDashboard: React.FC<{ user: User; initialView?: string }> = ({ user, 
                   </div>
                   {selectedComplaint.feedbackMessage && (
                     <div className="mt-4">
-                      <p className="text-xs text-purple-600 uppercase tracking-wider mb-2">Feedback Message</p>
+                      <p className="text-xs text-purple-600 uppercase tracking-normal mb-2">Feedback Message</p>
                       <p className="text-purple-900 italic">"{selectedComplaint.feedbackMessage}"</p>
                     </div>
                   )}

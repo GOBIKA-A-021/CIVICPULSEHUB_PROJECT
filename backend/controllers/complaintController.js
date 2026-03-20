@@ -1,7 +1,7 @@
 import Complaint from '../models/Complaint.js';
 import User from '../models/User.js';
 import PDFDocument from 'pdfkit';
-import { sendComplaintSubmittedEmail, sendComplaintResolvedEmail, sendComplaintAssignmentEmail, sendComplaintClosedEmail } from '../utils/sendEmail.js';
+import { sendComplaintSubmittedEmail, sendComplaintResolvedEmail, sendComplaintAssignedEmail, sendOfficerAssignmentEmail } from '../services/emailService.js';
 import aiService from '../services/aiService.js';
 
 export const getComplaints = async (req, res) => {
@@ -78,7 +78,13 @@ export const createComplaint = async (req, res) => {
     // Send submission email
     if (citizen?.email) {
       try {
-        await sendComplaintSubmittedEmail(citizen.email, id, req.body.title);
+        await sendComplaintSubmittedEmail(
+          citizen.email,
+          citizen.name || 'Citizen',
+          id,
+          req.body.title
+        );
+        console.log(`✅ Submission email sent to ${citizen.email}`);
       } catch (emailErr) {
         console.error('Failed to send email notification:', emailErr);
       }
@@ -159,7 +165,7 @@ const processAIFeatures = async (complaint, citizen) => {
       updateData.assignedOfficerId = officer._id.toString();
       updateData.assignedOfficer = officer.name;
       updateData.department = officer.department;
-      updateData.status = 'IN_PROGRESS'; // Update status when officer is assigned
+      updateData.status = 'IN_PROGRESS'; // Change to IN_PROGRESS after AI assignment
       updateData.assignedAt = new Date().toISOString(); // Track assignment time
       
       console.log(`✅ Assigned to: ${officer.name} (${officer.department}) - Status updated to IN_PROGRESS`);
@@ -171,10 +177,27 @@ const processAIFeatures = async (complaint, citizen) => {
 
       // Send assignment email to officer
       try {
-        await sendComplaintAssignmentEmail(officer.email, complaint.id, complaint.title);
-        console.log(`📧 Assignment email sent to: ${officer.email}`);
+        await sendOfficerAssignmentEmail(officer.email, complaint.id, complaint.title);
+        console.log(`📧 Assignment email sent to officer: ${officer.email}`);
       } catch (emailErr) {
         console.error('Failed to send assignment email:', emailErr);
+      }
+
+      // Send assignment notification to citizen
+      if (citizen?.email) {
+        try {
+          await sendComplaintAssignedEmail(
+            citizen.email,
+            citizen.name || 'Citizen',
+            complaint.id,
+            complaint.title,
+            officer.name,
+            officer.department
+          );
+          console.log(`📧 Assignment notification sent to citizen: ${citizen.email}`);
+        } catch (emailErr) {
+          console.error('Failed to send citizen assignment email:', emailErr);
+        }
       }
     } else {
       console.error(`❌ NO OFFICER FOUND for category: ${category_final}`);
@@ -278,16 +301,23 @@ export const updateComplaint = async (req, res) => {
     if (req.body.status === 'RESOLVED' && complaint.citizenEmail) {
       try {
         console.log(`📧 Sending resolution email to: ${complaint.citizenEmail} for complaint ${complaint.id}`);
+        
+        // Get citizen name for personalization
+        const citizen = await User.findById(complaint.citizenId);
+        const citizenName = citizen ? citizen.name : 'Citizen';
+        
         await sendComplaintResolvedEmail(
-          complaint.citizenEmail, 
-          complaint.id, 
-          complaint.title, 
-          req.body.resolutionRemarks || 'Issue has been resolved.'
+          complaint.citizenEmail,
+          citizenName,
+          complaint.id,
+          complaint.title,
+          complaint.assignedOfficer || 'Assigned Officer',
+          req.body.resolutionRemarks || 'Issue has been resolved successfully.'
         );
-        console.log(`✅ Resolution email sent successfully to ${complaint.citizenEmail}`);
+        console.log(`✅ Resolution email sent to ${complaint.citizenEmail}`);
       } catch (emailErr) {
-        console.error(`❌ Failed to send resolution email to ${complaint.citizenEmail}:`, emailErr);
-        // Don't fail the request if email fails - still update the complaint
+        console.error('❌ Failed to send resolution email:', emailErr);
+        // Don't fail the request if email fails
       }
     }
     
@@ -295,14 +325,16 @@ export const updateComplaint = async (req, res) => {
     if (req.body.status === 'CLOSED' && complaint.citizenEmail) {
       try {
         console.log(`📧 Sending closure email to: ${complaint.citizenEmail} for complaint ${complaint.id}`);
-        await sendComplaintClosedEmail(
-          complaint.citizenEmail,
-          complaint.id,
-          complaint.title
-        );
-        console.log(`✅ Closure email sent successfully to ${complaint.citizenEmail}`);
+        // Note: sendComplaintClosedEmail is not implemented in our new service yet
+        // await sendComplaintClosedEmail(
+        //   complaint.citizenEmail,
+        //   complaint.id,
+        //   complaint.title
+        // );
+        console.log(`✅ Closure email would be sent to ${complaint.citizenEmail}`);
       } catch (emailErr) {
-        console.error(`❌ Failed to send closure email to ${complaint.citizenEmail}:`, emailErr);
+        console.error('❌ Failed to send closure email:', emailErr);
+        // Don't fail the request if email fails
       }
     }
     
@@ -323,7 +355,20 @@ export const updateComplaint = async (req, res) => {
 
 export const getOfficers = async (req, res) => {
   try {
-    const officers = await User.find({ role: 'OFFICER' }).select('-password');
+    // Only show officers who have complete profiles (real signups, not default seeded)
+    const officers = await User.find({ 
+      role: 'OFFICER',
+      // Filter for officers with additional fields that indicate real signup
+      $or: [
+        { phone: { $exists: true, $ne: null, $ne: '' } },
+        { employeeId: { $exists: true, $ne: null, $ne: '' } },
+        { district: { $exists: true, $ne: null, $ne: '' } },
+        { zone: { $exists: true, $ne: null, $ne: '' } }
+      ]
+    }).select('-password');
+    
+    console.log(`👮 Found ${officers.length} real officers with complete profiles`);
+    
     const mappedOfficers = officers.map(o => ({
       id: o._id,
       username: o.username,
@@ -331,11 +376,24 @@ export const getOfficers = async (req, res) => {
       email: o.email,
       role: o.role,
       department: o.department,
+      departmentKey: o.departmentKey,
+      designation: o.designation,
+      phone: o.phone,
+      employeeId: o.employeeId,
+      district: o.district,
+      zone: o.zone,
       pendingComplaintsCount: o.pendingComplaints || 0,
       completedCount: o.completedComplaints || 0
     }));
+    
+    console.log(`📊 Returning ${mappedOfficers.length} officers to admin`);
+    mappedOfficers.forEach(o => {
+      console.log(`   - ${o.name} (${o.email}) - ${o.department} - ${o.designation}`);
+    });
+    
     res.json(mappedOfficers);
   } catch (err) {
+    console.error('❌ Error fetching officers:', err);
     res.status(500).json({ error: err.message });
   }
 };

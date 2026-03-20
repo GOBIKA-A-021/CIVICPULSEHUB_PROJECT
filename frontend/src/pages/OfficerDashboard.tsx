@@ -22,10 +22,9 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
   }, [initialView]);
 
   const loadGrievances = async () => {
-    const all = await api.getGrievances();
-    // Officers should only see complaints assigned to them
-    // Filter by the current officer's name
-    const officerComplaints = all.filter(g => g.assignedOfficer === user.name);
+    // Backend already filters complaints for the logged-in officer
+    // Just get the grievances that the backend returns for this officer
+    const officerComplaints = await api.getGrievances();
     console.log(`👮 Officer ${user.name} loaded ${officerComplaints.length} assigned complaints`);
     console.log(`📊 Officer complaints breakdown:`);
     officerComplaints.forEach(g => {
@@ -58,7 +57,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
   }, {});
 
   const categoryData = Object.keys(categoryCounts).map(cat => ({
-    name: cat,
+    name: cat.replace('_', ' '),
     count: categoryCounts[cat]
   })).sort((a, b) => b.count - a.count);
 
@@ -199,7 +198,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
         acc[g.category] = (acc[g.category] || 0) + 1;
         return acc;
       }, {} as Record<string, number>)
-    ).map(([category, count]) => ({ name: category, resolved: count as number }))
+    ).map(([category, count]) => ({ name: category.replace('_', ' '), resolved: count as number }))
     .sort((a, b) => (b.resolved as number) - (a.resolved as number));
 
     // Resolution rate
@@ -224,15 +223,15 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
           <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">📊 Performance Overview</h2>
           <div className="flex gap-4">
             <div className="bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">Resolution Rate</p>
+              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-normal">Resolution Rate</p>
               <p className="text-xl font-black text-emerald-700">{resolutionRate}%</p>
             </div>
             <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100">
-              <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Avg Resolution Time</p>
+              <p className="text-[8px] font-black text-blue-600 uppercase tracking-normal">Avg Resolution Time</p>
               <p className="text-xl font-black text-blue-700">{avgResolutionTime} days</p>
             </div>
             <div className="bg-purple-50 px-4 py-2 rounded-xl border border-purple-100">
-              <p className="text-[10px] font-black text-purple-600 uppercase tracking-wider">Total Resolved</p>
+              <p className="text-[8px] font-black text-purple-600 uppercase tracking-normal">Total Resolved</p>
               <p className="text-xl font-black text-purple-700">{resolvedComplaints.length}</p>
             </div>
           </div>
@@ -241,7 +240,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Status Distribution */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-8">Status Distribution</h3>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-8">Status Distribution</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -251,7 +250,8 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
                     cy="50%"
                     labelLine={false}
                     label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={80}
+                    labelStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                    outerRadius={60}
                     fill="#8884d8"
                     paddingAngle={5}
                     dataKey="value"
@@ -261,7 +261,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend verticalAlign="bottom" height={36}/>
+                  <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px' }}/>
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -269,7 +269,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
 
           {/* Category-wise Resolutions */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-8">🏷️ Category-wise Resolutions</h3>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-8">🏷️ Category-wise Resolutions</h3>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -278,7 +278,8 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
+                  labelStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                  outerRadius={60}
                   fill="#8884d8"
                   dataKey="resolved"
                 >
@@ -294,14 +295,14 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
 
         {/* Weekly Performance */}
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-8">📈 Weekly Performance (Last 4 Weeks)</h3>
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-8">📈 Weekly Performance (Last 4 Weeks)</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyData}>
-                <XAxis dataKey="name" />
-                <YAxis />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '10px' }} />
                 <Bar dataKey="resolved" fill="#10b981" name="Resolved" />
                 <Bar dataKey="total" fill="#3b82f6" name="Total" />
               </BarChart>
@@ -311,14 +312,14 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
 
         {/* Monthly Performance */}
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-8">📅 Monthly Performance (Last 6 Months)</h3>
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-8">📅 Monthly Performance (Last 6 Months)</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
-                <XAxis dataKey="name" />
-                <YAxis />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '10px' }} />
                 <Bar dataKey="resolved" fill="#10b981" name="Resolved" />
                 <Bar dataKey="total" fill="#3b82f6" name="Total" />
               </BarChart>
@@ -329,14 +330,21 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Categories Handled */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-8">Categories Handled</h3>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-8">Categories Handled</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData}>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold', angle: -45 }} height={80} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                <BarChart data={categoryData} layout="horizontal" margin={{ top: 5, right: 5, left: 180, bottom: 5 }}>
+                  <XAxis type="number" tick={{ fontSize: 9 }} />
+                  <YAxis 
+                    type="category" 
+                    dataKey="name" 
+                    tick={{ fontSize: 9, fontWeight: 'bold' }} 
+                    width={175}
+                    angle={0}
+                    textAnchor="end"
+                  />
                   <Tooltip cursor={{ fill: '#F8FAFC' }} />
-                  <Bar dataKey="resolved" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="resolved" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -344,7 +352,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
 
           {/* Recent Resolutions */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-6">✅ Recent Resolutions</h3>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-normal mb-6">✅ Recent Resolutions</h3>
             {resolvedComplaints.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-slate-400 font-medium">No resolved complaints yet</p>
@@ -358,7 +366,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
                       <p className="text-xs text-slate-600">{g.category} • {g.location}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">
+                      <span className="text-[8px] font-black text-emerald-600 uppercase tracking-normal">
                         {g.status.replace('_', ' ')}
                       </span>
                       <p className="text-xs text-slate-500 mt-1">
@@ -380,12 +388,12 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
       <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Active Assignments</h2>
       {filteredGrievances.map(g => (
         <div key={g.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row">
-          <div className="w-full md:w-80 h-48 md:h-auto relative bg-slate-100">
+          <div className="w-full md:w-48 h-32 md:h-auto relative bg-slate-100">
             {g.issueImage ? (
-              <img src={g.issueImage} className="w-full h-full object-cover" alt="Issue" />
+              <img src={g.issueImage} className="w-full h-full object-contain" alt="Issue" />
             ) : (
               <div className="w-full h-full flex items-center justify-center opacity-20">
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             )}
           </div>
@@ -397,7 +405,7 @@ const OfficerDashboard: React.FC<{ user: User; initialView?: string }> = ({ user
                   <h3 className="text-xl font-black text-slate-900">{g.title}</h3>
                   <p className="text-sm text-slate-500 mt-2">{g.location}</p>
                 </div>
-                <span className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                <span className={`px-4 py-2 rounded-lg text-[8px] font-black uppercase tracking-normal border ${
                   g.status === GrievanceStatus.REOPENED ? 'bg-red-50 text-red-600 border-red-100' :
                   g.status === GrievanceStatus.RESOLVED ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
                   g.status === GrievanceStatus.CLOSED ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
